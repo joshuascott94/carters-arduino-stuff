@@ -16,10 +16,14 @@ dht11 DHT;
 #define DHT11_PIN 7  //define the DHT11 as the digital pin 7
 
 #include <Servo.h>
-Servo lr_servo;  //define the name of the servo rotating right and left
-Servo ud_servo;  //efine the name of the servo rotating upwards and downwards
+Servo lr_servo;  // define the name of the servo rotating right and left
+Servo ud_servo;  // define the name of the servo rotating upwards and downwards
 
-const byte interruptPin = 2;  //the pin of button;the corruption is disrupted
+const byte buttonPin = 2;  //the pin of button;the corruption is disrupted
+long buttonTimer = 0;
+long longPressTime = 250;
+boolean buttonActive = false;
+boolean longPressActive = false;
 
 int lr_angle = 90;  //set the initial angle to 90 degree
 int ud_angle = 10;  //set the initial angle to 10 degree;keep the solar panels upright to detect the strongest light
@@ -27,7 +31,6 @@ int l_state = A0;   //define the analog voltage input of the photoresistors
 int r_state = A1;
 int u_state = A2;
 int d_state = A3;
-#define BUZZER_PIN 6
 const byte buzzer = 6;        //set the pin of the buzzer to digital pin 6
 const byte lr_servopin = 9;   //define the control signal pin of the servo rotating right and lef
 const byte ud_servopin = 10;  //define the control signal pin of the servo rotating clockwise and anticlockwise
@@ -52,8 +55,8 @@ void setup() {
   pinMode(u_state, INPUT);
   pinMode(d_state, INPUT);
 
-  pinMode(interruptPin, INPUT_PULLUP);                                               //the button pin is set to input pull-up mode
-  attachInterrupt(digitalPinToInterrupt(interruptPin), adjust_resolution, FALLING);  //xternal interrupt touch type is falling edge; adjust_resolution is interrupt service function ISR
+  pinMode(buttonPin, INPUT_PULLUP);                                               //the button pin is set to input pull-up mode
+  attachInterrupt(digitalPinToInterrupt(buttonPin), adjust_resolution, CHANGE);  //xternal interrupt touch type is falling edge; adjust_resolution is interrupt service function ISR
 
   lcd.init();       // initialize the LCD
   lcd.backlight();  //set LCD backlight
@@ -224,9 +227,38 @@ void read_dht11() {
 
 /*********function disrupts service**************/
 void adjust_resolution() {
+  if (digitalRead(buttonPin) == HIGH) {
+
+		if (buttonActive == false) {
+			buttonActive = true;
+			buttonTimer = millis();
+		}
+
+		if ((millis() - buttonTimer > longPressTime) && (longPressActive == false)) {
+			longPressActive = true;
+      play_song();
+		}
+
+	} else {
+		if (buttonActive == true) {
+			if (longPressActive == true) {
+				longPressActive = false;
+			} else {
+        if (resolution < 5) {
+          resolution++;
+        } else {
+          resolution = 1;
+        }
+			}
+
+			buttonActive = false;
+		}
+
+	}
+
   tone(buzzer, 1000, 100);
   delay(10);  //delay to eliminate vibration
-  if (!digitalRead(interruptPin)) {
+  if (!digitalRead(buttonPin)) {
     if (resolution < 5) {
       resolution++;
     } else {
@@ -236,9 +268,7 @@ void adjust_resolution() {
 }
 
 void play_song() {
-  #define BUZZER_PIN 6
   #define NOTE_B0 31
-
   #define NOTE_C1 33
   #define NOTE_CS1 35
   #define NOTE_D1 37
@@ -251,7 +281,6 @@ void play_song() {
   #define NOTE_A1 55
   #define NOTE_AS1 58
   #define NOTE_B1 62
-
   #define NOTE_C2 65
   #define NOTE_CS2 69
   #define NOTE_D2 73
@@ -264,7 +293,6 @@ void play_song() {
   #define NOTE_A2 110
   #define NOTE_AS2 117
   #define NOTE_B2 123
-
   #define NOTE_C3 131
   #define NOTE_CS3 139
   #define NOTE_D3 147
@@ -276,10 +304,8 @@ void play_song() {
   #define NOTE_GS3 208
   #define NOTE_A3 220
   #define NOTE_AS3 233
-
   #define NOTE_Bb3 241
   #define NOTE_B3 247
-
   #define NOTE_C4 262
   #define NOTE_CS4 277
   #define NOTE_D4 294
@@ -404,14 +430,14 @@ void play_song() {
     2, 2, 2, 2,
   };
 
-  pinMode(BUZZER_PIN, OUTPUT);
+  //pinMode(BUZZER_PIN, OUTPUT);
   int size = sizeof(durations) / sizeof(int);
 
   for (int note = 0; note < size; note++) {
     //to calculate the note duration, take one second divided by the note type.
     //e.g. quarter note = 1000 / 4, eighth note = 1000/8, etc.
     int duration = 1000 / durations[note];
-    tone(BUZZER_PIN, melody[note], duration);
+    tone(buzzer, melody[note], duration);
 
     //to distinguish the notes, set a minimum time between them.
     //the note's duration + 30% seems to work well:
@@ -419,7 +445,7 @@ void play_song() {
     delay(pauseBetweenNotes);
 
     //stop the tone playing:
-    noTone(BUZZER_PIN);
+    noTone(buzzer);
   }
 
 }

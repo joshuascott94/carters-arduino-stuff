@@ -21,7 +21,10 @@ Servo lr_servo;
 Servo ud_servo;
 
  // set button to pin 2;
-const byte buttonPin = 2;           
+const byte buttonPin = 2;   
+byte lastButtonState = LOW;
+unsigned long debounceDuration = 50; // millis
+unsigned long lastTimeButtonStateChanged = 0;        
 
 // set the initial angle to 90 degree
 // set the initial angle to 10 degree; keep the solar panels upright to detect the strongest light
@@ -43,8 +46,8 @@ const byte lr_servopin = 9;
 const byte ud_servopin = 10;  
 
 unsigned int light;   //save the variable of light intensity
-byte error = 10;      //Define the error range to prevent vibration
-byte m_speed = 100;    //set delay time to adjust the speed of servo;the longer the time, the smaller the speed
+byte error = 50;      //Define the error range to prevent vibration
+byte m_speed = 1500;    //set delay time to adjust the speed of servo;the longer the time, the smaller the speed
 byte resolution = 1;  //set the rotation accuracy of the servo, the minimum rotation angle
 int temperature;      //save the variable of temperature
 int humidity;         //save the variable of humidity
@@ -72,7 +75,7 @@ void setup() {
   // set the button pin is set to input pull-up mode
   // and attach external interrupt touch type is falling edge; adjust_resolution is interrupt service function ISR    
   pinMode(buttonPin, INPUT_PULLUP);         
-  attachInterrupt(digitalPinToInterrupt(buttonPin), adjust_resolution, FALLING);  
+  //attachInterrupt(digitalPinToInterrupt(buttonPin), play_song, FALLING);  
 
    // initialize the LCD and set LCD backlight
   lcd.init();      
@@ -97,6 +100,22 @@ void loop() {
 
   //Lcd shows the values of light intensity, temperature and humidity
   LcdShowValue();  
+
+  byte buttonState = digitalRead(buttonPin);
+  if (millis() - lastTimeButtonStateChanged > debounceDuration) {
+      byte buttonState = digitalRead(buttonPin);
+      if (buttonState != lastButtonState) {
+      lastTimeButtonStateChanged = millis();
+      lastButtonState = buttonState;
+      if (buttonState == LOW) {
+        // do an action, for example print on Serial
+        play_song();
+        Serial.println("Button Pressed");
+      }
+    }
+  }
+
+  
 }
 
 /**********the function of the servo************/
@@ -261,9 +280,10 @@ void read_dht11() {
 
 /********* function disrupts service **************/
 void adjust_resolution() {
+  // play_song();
   // tone(buzzer, 1000, 100);
   delay(10);  //delay to eliminate vibration
-  if (!digitalRead(interruptPin)) {
+  if (!digitalRead(buttonPin)) {
     play_song();
     /* if (resolution < 5) {
       resolution++;
@@ -369,6 +389,8 @@ void play_song() {
   #define REST 0
 
   int melody[] = {
+    // 
+
     // Notes go here
     NOTE_C4, NOTE_C4, NOTE_C4, NOTE_C4, NOTE_C4, NOTE_Bb3, NOTE_A3, REST,
     NOTE_C4, NOTE_C4, NOTE_C4, NOTE_C4, NOTE_C4, NOTE_Bb3, NOTE_A3,
@@ -389,6 +411,7 @@ void play_song() {
     NOTE_A3, NOTE_G3, NOTE_F3, NOTE_G3, NOTE_A3, NOTE_A3,
     NOTE_B3, NOTE_B3, NOTE_B3, NOTE_B3, NOTE_B3, NOTE_B3,
     NOTE_C4, NOTE_D4, NOTE_E4, NOTE_D4, NOTE_C4, REST,
+
     NOTE_C4, NOTE_C4, NOTE_C4, NOTE_C4, NOTE_C4, NOTE_C4, NOTE_Bb3, NOTE_A3,
     NOTE_C4, NOTE_C4, NOTE_C4, NOTE_C4, NOTE_C4, NOTE_Bb3, NOTE_A3,
     NOTE_C4, NOTE_D4, NOTE_F4, NOTE_F4, NOTE_D4, NOTE_F4, NOTE_D4, NOTE_F4, NOTE_G4, NOTE_A4,
@@ -398,9 +421,23 @@ void play_song() {
     NOTE_F4, NOTE_G4, NOTE_F4, NOTE_F4,
     NOTE_G4, NOTE_A4, NOTE_C5, NOTE_C5,
     NOTE_A4, NOTE_D5, NOTE_C5, NOTE_C5,
+
     NOTE_A4, NOTE_A4, NOTE_A4, NOTE_F4, NOTE_F4, 
     NOTE_A4, NOTE_A4, NOTE_F4, NOTE_F4, 
     NOTE_F4, NOTE_F4, NOTE_F4, NOTE_F4, NOTE_F4,
+    
+    NOTE_D4, NOTE_D4, NOTE_D4, NOTE_D4, NOTE_D4, NOTE_C4, NOTE_F4, 
+    NOTE_C4, NOTE_C4, NOTE_C4, NOTE_C4, NOTE_C4, NOTE_A3, NOTE_F4,
+    NOTE_Bb3, NOTE_Bb3, NOTE_Bb3, NOTE_Bb3, NOTE_Bb3, NOTE_A3,
+
+    NOTE_C4, NOTE_Bb3, NOTE_A3, NOTE_A3, NOTE_A3, NOTE_A3,
+    NOTE_G3, NOTE_G3, NOTE_G3, NOTE_G3, NOTE_G3, NOTE_G3,
+    NOTE_A3, NOTE_G3, NOTE_F3, NOTE_A3, NOTE_D4, NOTE_F4,
+
+    NOTE_E4, NOTE_D4, NOTE_C4, NOTE_A3, NOTE_G3,
+    NOTE_C4, NOTE_C4, NOTE_C4, NOTE_C4, NOTE_C4, NOTE_C4, 
+    NOTE_Bb3, NOTE_A3, NOTE_Bb3, 
+    NOTE_C4, NOTE_C4, NOTE_C4, NOTE_C4, NOTE_C4, NOTE_Bb3, NOTE_A3
 
     // A G F D  F G F F  G A C C  A D C C
     // A A A F  F A A F  F F F F  
@@ -413,6 +450,7 @@ void play_song() {
     4, 4, 4, 4, 4, 4, 4,
     4, 4, 4, 4, 8, 4, 4,
     4, 4, 4, 4, 4, 4, 4,
+
     4, 4, 4, 4, 4, 4, 4, 8,
     4, 4, 4, 4, 4, 4, 4,
     4, 4, 4, 4, 8, 4, 4,
@@ -422,22 +460,39 @@ void play_song() {
     4, 4, 4, 4, 8, 4, 2,
     4, 4, 4, 4, 4, 4,
     4, 4, 2, 4, 2, 8,
-    4, 4, 4, 4, 4, 4, 4, 
-    4, 4, 2, 2, 4, 8,
-    4, 4, 4, 4, 4, 4,
-    4, 4, 4, 8, 4, 2,
+    
+    4, 4, 4, 4, 4, 4, 
+    4, 4, 4, 2, 2, 4, 
+    8, 4, 4, 4, 4, 4, 
+    4, 4, 4, 4, 8, 4, 
 
-    4, 4, 4, 4, 4, 4, 8, 4,
-    4, 4, 4, 4, 4, 8, 4, 
+    2, 4, 4, 4, 4, 4, 4, 8, 
+    4, 4, 4, 4, 4, 4, 8, 
     4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
     2, 
+
     4, 4, 4, 4, 
     4, 4, 4, 4,
     4, 4, 4, 4,
     4, 4, 8, 8,
+
     4, 4, 4, 4, 4, 
     4, 4, 8, 8, 
-    2, 2, 2, 2,
+    2, 2, 2, 2, 2,
+
+    4, 4, 4, 4, 4, 8, 2,
+    4, 4, 4, 4, 4, 8, 2,
+    4, 4, 4, 4, 4, 8,
+
+    4, 4, 2, 2, 2, 2,
+    4, 4, 4, 4, 4, 4,
+    4, 4, 2, 4, 4, 2,
+
+    4, 4, 4, 4, 1,
+    4, 4, 4, 4, 4, 4,
+    5, 4, 5, 
+    4, 4, 4, 4, 4, 8, 4,
+
   };
 
   //pinMode(BUZZER_PIN, OUTPUT);

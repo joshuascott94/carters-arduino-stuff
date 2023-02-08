@@ -17,10 +17,14 @@ dht11 DHT;
 // define the name of the servo rotating right and left
 // define the name of the servo rotating upwards and downwards
 #include <Servo.h>
-Servo lr_servo;         
-Servo ud_servo;
+//#include <SlowMotionServo.h>
+//Servo lr_servo;         
+//Servo ud_servo;
+//unsigned long MOVING_TIME = 3000; // moving time is 3 seconds
+//unsigned long moveStartTime;
 
  // set button to pin 2;
+bool button_pressed = false;
 const byte buttonPin = 2;   
 byte lastButtonState = LOW;
 unsigned long debounceDuration = 50; // millis
@@ -46,13 +50,58 @@ const byte lr_servopin = 9;
 const byte ud_servopin = 10;  
 
 unsigned int light;   //save the variable of light intensity
-byte error = 50;      //Define the error range to prevent vibration
-byte m_speed = 1500;    //set delay time to adjust the speed of servo;the longer the time, the smaller the speed
+byte error = 10;      //Define the error range to prevent vibration
+byte m_speed = 1000;    //set delay time to adjust the speed of servo;the longer the time, the smaller the speed
 byte resolution = 1;  //set the rotation accuracy of the servo, the minimum rotation angle
 int temperature;      //save the variable of temperature
 int humidity;         //save the variable of humidity
 
+// for buzzer stuff
+unsigned long previousMillis = 0;
+unsigned long pauseBetweenNotes;
+int thisNote;
+
+// make your own servo class
+class SlowServo {
+protected:
+  uint16_t target = 90;   // target angle
+  uint16_t current = 90;  // current angle
+  uint8_t interval = 50;  // delay time
+  uint32_t previousMillis = 0;
+public:
+  Servo servo;
+
+  void begin(byte pin) {
+    servo.attach(pin);
+  }
+
+  void setSpeed(uint8_t newSpeed) {
+    interval = newSpeed;
+  }
+
+  void set(uint16_t newTarget) {
+    target = newTarget;
+  }
+
+  void update() {
+    if (millis() - previousMillis > interval) {
+      previousMillis = millis();
+      if (target < current) {
+        current--;
+        servo.write(current);
+      } else if (target > current) {
+        current++;
+        servo.write(current);
+      }
+    }
+  }
+};
+
+SlowServo lr_servo;
+SlowServo ud_servo;
+
 void setup() {
+
   //define the serial baud rate
   Serial.begin(9600);  
 
@@ -60,11 +109,17 @@ void setup() {
   Wire.begin();
   lightMeter.begin();
 
+  //Servo lr_servo;         
+  //Servo ud_servo;
+
+
   // set the control pin of left-right servo
-  lr_servo.attach(lr_servopin);
+  //lr_servo.attach(lr_servopin);
+  lr_servo.begin(lr_servopin);
 
   // set the control pin of up-down servo
-  ud_servo.attach(ud_servopin);  
+  //ud_servo.attach(ud_servopin);  
+  ud_servo.begin(ud_servopin);
 
   // set the mode of servo pins
   pinMode(l_state, INPUT);       
@@ -82,10 +137,18 @@ void setup() {
   lcd.backlight();  
 
   //return to initial angle
-  lr_servo.write(lr_angle);  
-  delay(1000);
-  ud_servo.write(ud_angle);
-  delay(1000);
+  //lr_servo.write(lr_angle);
+  //delay(1000);
+  //ud_servo.write(ud_angle);
+  //delay(1000);
+  lr_servo.set(lr_angle);
+  ud_servo.set(ud_angle);
+
+  lr_servo.update();
+  ud_servo.update();
+
+
+  
 }
 
 void loop() {
@@ -110,7 +173,7 @@ void loop() {
       if (buttonState == LOW) {
         // do an action, for example print on Serial
         play_song();
-        Serial.println("Button Pressed");
+        //Serial.println("Button Pressed");
       }
     }
   }
@@ -128,67 +191,103 @@ void ServoAction() {
 
   /**********************system adjusting left and right序**********************/
   //  abs() is the absolute value function
-  if (abs(L - R) > error && L > R) {  //Determine whether the error is within the acceptable range, otherwise adjust the steering gear
-    lr_angle -= resolution;           //reduce the angle
-    //    lr_servo.attach(lr_servopin);  // connect servo
-    if (lr_angle < 0) {  //limit the rotation angle of the servo
+  if (abs(L - R) > error && L > R)  {                         
+    
+    // Determine whether the error is within the acceptable range, otherwise adjust the steering gear
+    lr_angle -= resolution; 
+    
+     // limit the rotation angle of the servo
+    if (lr_angle < 0) { 
       lr_angle = 0;
     }
-    lr_servo.write(lr_angle);  //output the angle of the servooutput the angle of servo
-    delay(m_speed);
 
-  } else if (abs(L - R) > error && L < R) {  //Determine whether the error is within the acceptable range, otherwise adjust the steering gear
-    lr_angle += resolution;                  //increase the angle
-    //    lr_servo.attach(lr_servopin);    // connect servo
-    if (lr_angle > 180) {  //limit the rotation angle of servo
+    // output the angle of the servo
+    //lr_servo.write(lr_angle); 
+    //delay(m_speed);
+    lr_servo.set(lr_angle);
+
+  } else if (abs(L - R) > error && L < R)  {                         
+    
+    // Determine whether the error is within the acceptable range, otherwise adjust the steering gear
+    lr_angle += resolution; 
+    
+    // limit the rotation angle of servo
+    if (lr_angle > 180) { 
       lr_angle = 180;
     }
-    lr_servo.write(lr_angle);  //output the angle of servo
-    delay(m_speed);
 
-  } else if (abs(L - R) <= error) {  //Determine whether the error is within the acceptable range, otherwise adjust the steering gear
-    //    lr_servo.detach();  //release the pin of servo
-    lr_servo.write(lr_angle);  //output the angle of servo
+    // output the angle of servo
+    // lr_servo.write(lr_angle); 
+    //delay(m_speed);
+    lr_servo.set(lr_angle);
+  
+  } else if (abs(L - R) <= error) { 
+    
+    // Determine whether the error is within the acceptable range, otherwise adjust the steering gear
+    //lr_servo.write(lr_angle); 
+    lr_servo.set(lr_angle);
   }
-  /**********************system adjusting up and down**********************/
-  if (abs(U - D) > error && U >= D) {  //Determine whether the error is within the acceptable range, otherwise adjust the steering gear
-    ud_angle -= resolution;            //reduce the angle
-    //    ud_servo.attach(ud_servopin);  // connect servo
-    if (ud_angle < 10) {  //limit the rotation angle of servo
+  
+  // # # # # # # # # # # # # # # # # #
+  // Adjust the up/down servo
+  // # # # # # # # # # # # # # # # # #
+  if (abs(U - D) > error && U >= D) {
+    
+    // Determine whether the error is within the acceptable range, otherwise adjust the steering gear
+    ud_angle -= resolution; 
+    
+    // limit the rotation angle of servo
+    if (ud_angle < 10) { 
       ud_angle = 10;
     }
-    ud_servo.write(ud_angle);  //output the angle of servo
-    delay(m_speed);
 
-  } else if (abs(U - D) > error && U < D) {  //Determine whether the error is within the acceptable range, otherwise adjust the steering gear
-    ud_angle += resolution;                  //increase the angle
-    //    ud_servo.attach(ud_servopin);  // connect servo
-    if (ud_angle > 90) {  //limit the rotation angle of servo
+    // output the angle of servo
+    // ud_servo.write(ud_angle); 
+    // delay(m_speed);
+    ud_servo.set(ud_angle);
+  
+  } else if (abs(U - D) > error && U < D)  {
+    
+    // Determine whether the error is within the acceptable range, otherwise adjust the steering gear
+    ud_angle += resolution;
+
+    // limit the rotation angle of servo
+    if (ud_angle > 90) { 
       ud_angle = 90;
     }
-    ud_servo.write(ud_angle);  //output the angle of servo
-    delay(m_speed);
 
-  } else if (abs(U - D) <= error) {  //Determine whether the error is within the acceptable range. If it is, keep it stable and make no change in angle
-    //    ud_servo.detach();  //release the pin of servo
-    ud_servo.write(ud_angle);  //output the angle of servo
+    // output the angle of servo
+    // ud_servo.write(ud_angle); 
+    // delay(m_speed);
+    ud_servo.set(ud_angle);
+
+  } else if (abs(U - D) <= error) { 
+    
+    // Determine whether the error is within the acceptable range. If it is, keep it stable and make no change in angle
+    // ud_servo.write(ud_angle);
+    ud_servo.set(ud_angle);
   }
 
-  //Serial monitor displays the resistance of the photoresistor and the angle of servo
-  /*Serial.print(" L ");
-  Serial.print(L);
-  Serial.print(" R ");
-  Serial.print(R);
-  Serial.print("  U ");
-  Serial.print(U);
-  Serial.print(" D ");
-  Serial.print(D);
-  Serial.print("  ud_angle ");
-  Serial.print(ud_angle);
-  Serial.print("  lr_angle ");
-  Serial.println(lr_angle);
-  delay(1000);  //During the test, the serial port data is received too fast, and it can be adjusted by adding delay time 
-  */
+  // //Serial monitor displays the resistance of the photoresistor and the angle of servo
+  // Serial.print(" L ");
+  // Serial.print(L);
+  // Serial.print(" R ");
+  // Serial.print(R);
+  // Serial.print("  U ");
+  // Serial.print(U);
+  // Serial.print(" D ");
+  // Serial.print(D);
+  // Serial.print("  ud_angle ");
+  // Serial.print(ud_angle);
+  // Serial.print("  lr_angle ");
+  // Serial.println(lr_angle);
+  // delay(1000);  //During the test, the serial port data is received too fast, and it can be adjusted by adding delay time 
+
+  // Update slow servo
+  lr_servo.update();
+  ud_servo.update();
+  
+  
 }
 
 void LcdShowValue() {
@@ -279,47 +378,15 @@ void read_dht11() {
 }
 
 /********* function disrupts service **************/
-void adjust_resolution() {
-  // play_song();
-  // tone(buzzer, 1000, 100);
-  delay(10);  //delay to eliminate vibration
+void button_function() {
+
+  // delay(10);  //delay to eliminate vibration
   if (!digitalRead(buttonPin)) {
-    play_song();
-    /* if (resolution < 5) {
-      resolution++;
-    } else {
-      resolution = 1;
-    }
-    */
+    button_pressed = true;
   }
 }
 
 void play_song() {
-  #define NOTE_B0 31
-  #define NOTE_C1 33
-  #define NOTE_CS1 35
-  #define NOTE_D1 37
-  #define NOTE_DS1 39
-  #define NOTE_E1 41
-  #define NOTE_F1 44
-  #define NOTE_FS1 46
-  #define NOTE_G1 49
-  #define NOTE_GS1 52
-  #define NOTE_A1 55
-  #define NOTE_AS1 58
-  #define NOTE_B1 62
-  #define NOTE_C2 65
-  #define NOTE_CS2 69
-  #define NOTE_D2 73
-  #define NOTE_DS2 78
-  #define NOTE_E2 82
-  #define NOTE_F2 87
-  #define NOTE_FS2 93
-  #define NOTE_G2 98
-  #define NOTE_GS2 104
-  #define NOTE_A2 110
-  #define NOTE_AS2 117
-  #define NOTE_B2 123
   #define NOTE_C3 131
   #define NOTE_CS3 139
   #define NOTE_D3 147
@@ -358,156 +425,148 @@ void play_song() {
   #define NOTE_A5 880
   #define NOTE_AS5 932
   #define NOTE_B5 988
-  #define NOTE_C6 1047
-  #define NOTE_CS6 1109
-  #define NOTE_D6 1175
-  #define NOTE_DS6 1245
-  #define NOTE_E6 1319
-  #define NOTE_F6 1397
-  #define NOTE_FS6 1480
-  #define NOTE_G6 1568
-  #define NOTE_GS6 1661
-  #define NOTE_A6 1760
-  #define NOTE_AS6 1865
-  #define NOTE_B6 1976
-  #define NOTE_C7 2093
-  #define NOTE_CS7 2217
-  #define NOTE_D7 2349
-  #define NOTE_DS7 2489
-  #define NOTE_E7 2637
-  #define NOTE_F7 2794
-  #define NOTE_FS7 2960
-  #define NOTE_G7 3136
-  #define NOTE_GS7 3322
-  #define NOTE_A7 3520
-  #define NOTE_AS7 3729
-  #define NOTE_B7 3951
-  #define NOTE_C8 4186
-  #define NOTE_CS8 4435
-  #define NOTE_D8 4699
-  #define NOTE_DS8 4978
   #define REST 0
 
   int melody[] = {
     // 
 
     // Notes go here
-    NOTE_C4, NOTE_C4, NOTE_C4, NOTE_C4, NOTE_C4, NOTE_Bb3, NOTE_A3, REST,
-    NOTE_C4, NOTE_C4, NOTE_C4, NOTE_C4, NOTE_C4, NOTE_Bb3, NOTE_A3,
-    NOTE_D4, NOTE_D4, NOTE_D4, NOTE_D4, NOTE_D4, NOTE_C4, NOTE_Bb3,
-    NOTE_D4, NOTE_D4, NOTE_D4, NOTE_D4, NOTE_D4, NOTE_C4, NOTE_Bb3,
+    NOTE_C4, 4, NOTE_C4, 4, NOTE_C4, 4, NOTE_C4, 4, NOTE_C4, 4, NOTE_Bb3, 8, NOTE_A3, 4, REST, 8, 
+    NOTE_C4, 4, NOTE_C4, 4, NOTE_C4, 4, NOTE_C4, 4, NOTE_C4, 4, NOTE_Bb3, 8, NOTE_A3, 4,
+    NOTE_D4, 4, NOTE_D4, 4, NOTE_D4, 4, NOTE_D4, 4, NOTE_D4, 8, NOTE_C4,  4, NOTE_Bb3,4, 
+    NOTE_D4, 4, NOTE_D4, 4, NOTE_D4, 4, NOTE_D4, 4, NOTE_D4, 4, NOTE_C4,  4, NOTE_Bb3,4,
 
-    NOTE_C4, NOTE_C4, NOTE_C4, NOTE_C4, NOTE_C4, NOTE_Bb3, NOTE_A3, REST,
-    NOTE_C4, NOTE_C4, NOTE_C4, NOTE_C4, NOTE_C4, NOTE_Bb3, NOTE_A3,
-    NOTE_D4, NOTE_D4, NOTE_D4, NOTE_D4, NOTE_D4, NOTE_C4, NOTE_Bb3,
-    NOTE_D4, NOTE_D4, NOTE_D4, NOTE_D4, NOTE_D4, NOTE_C4, NOTE_Bb3,
+    NOTE_C4, 4, NOTE_C4, 4, NOTE_C4, 4, NOTE_C4, 4, NOTE_C4, 4, NOTE_Bb3, 8, NOTE_A3, 4, REST, 8,
+    NOTE_C4, 4, NOTE_C4, 4, NOTE_C4, 4, NOTE_C4, 4, NOTE_C4, 4, NOTE_Bb3, 8, NOTE_A3, 4, 
+    NOTE_D4, 4, NOTE_D4, 4, NOTE_D4, 4, NOTE_D4, 4, NOTE_D4, 8, NOTE_C4, 4, NOTE_Bb3, 4, 
+    NOTE_D4, 4, NOTE_D4, 4, NOTE_D4, 4, NOTE_D4, 4, NOTE_D4, 4, NOTE_C4, 4, NOTE_Bb3, 4,
 
-    NOTE_D4, NOTE_D4, NOTE_D4, NOTE_D4, NOTE_D4, NOTE_D4, NOTE_F4,
-    NOTE_C4, NOTE_C4, NOTE_C4, NOTE_C4, NOTE_C4, NOTE_C4, NOTE_F4,
-    NOTE_Bb3, NOTE_Bb3, NOTE_Bb3, NOTE_Bb3, NOTE_Bb3, NOTE_Bb3,
-    NOTE_C4, NOTE_Bb3, NOTE_A3, NOTE_Bb3, NOTE_C4, NOTE_F4,
+    NOTE_D4, 4, NOTE_D4, 4, NOTE_D4, 4, NOTE_D4, 4, NOTE_D4, 8, NOTE_D4, 4, NOTE_F4, 2,
+    NOTE_C4, 4, NOTE_C4, 4, NOTE_C4, 4, NOTE_C4, 4, NOTE_C4, 4, NOTE_C4, 4, NOTE_F4, 2,
+    NOTE_Bb3,4, NOTE_Bb3,4, NOTE_Bb3,4, NOTE_Bb3,4, NOTE_Bb3,4, NOTE_Bb3,4,
+    NOTE_C4, 4, NOTE_Bb3,4, NOTE_A3, 2, NOTE_Bb3,4, NOTE_C4, 2, NOTE_F4, 8,
 
-    NOTE_G3, NOTE_G3, NOTE_G3, NOTE_G3, NOTE_G3, NOTE_G3,
-    NOTE_A3, NOTE_G3, NOTE_F3, NOTE_G3, NOTE_A3, NOTE_A3,
-    NOTE_B3, NOTE_B3, NOTE_B3, NOTE_B3, NOTE_B3, NOTE_B3,
-    NOTE_C4, NOTE_D4, NOTE_E4, NOTE_D4, NOTE_C4, REST,
+    NOTE_G3, 4, NOTE_G3, 4, NOTE_G3, 4, NOTE_G3, 4, NOTE_G3, 4, NOTE_G3, 4,
+    NOTE_A3, 4, NOTE_G3, 4, NOTE_F3, 4, NOTE_G3, 2, NOTE_A3, 2, NOTE_A3, 4,
+    NOTE_B3, 8, NOTE_B3, 4, NOTE_B3, 4, NOTE_B3, 4, NOTE_B3, 4, NOTE_B3, 4,
+    NOTE_C4, 4, NOTE_D4, 4, NOTE_E4, 4, NOTE_D4, 4, NOTE_C4, 8, REST, 4,
 
-    NOTE_C4, NOTE_C4, NOTE_C4, NOTE_C4, NOTE_C4, NOTE_C4, NOTE_Bb3, NOTE_A3,
-    NOTE_C4, NOTE_C4, NOTE_C4, NOTE_C4, NOTE_C4, NOTE_Bb3, NOTE_A3,
-    NOTE_C4, NOTE_D4, NOTE_F4, NOTE_F4, NOTE_D4, NOTE_F4, NOTE_D4, NOTE_F4, NOTE_G4, NOTE_A4,
-    REST, 
+    NOTE_C4, 2, NOTE_C4, 4, NOTE_C4, 4, NOTE_C4, 4, NOTE_C4, 4, NOTE_C4, 4, NOTE_Bb3, 4, NOTE_A3, 8,
+    NOTE_C4, 4, NOTE_C4, 4, NOTE_C4, 4, NOTE_C4, 4, NOTE_C4, 4, NOTE_Bb3,4, NOTE_A3, 8,
+    NOTE_C4, 4, NOTE_D4, 4, NOTE_F4, 4, NOTE_F4, 4, NOTE_D4, 4,
+    NOTE_F4, 4, NOTE_D4, 4, NOTE_F4, 4, NOTE_G4, 4, NOTE_A4, 4,
+    REST, 2,
 
-    NOTE_A4, NOTE_G4, NOTE_F4, NOTE_D4,
-    NOTE_F4, NOTE_G4, NOTE_F4, NOTE_F4,
-    NOTE_G4, NOTE_A4, NOTE_C5, NOTE_C5,
-    NOTE_A4, NOTE_D5, NOTE_C5, NOTE_C5,
+    NOTE_A4, 4, NOTE_G4, 4, NOTE_F4, 4, NOTE_D4, 4, 
+    NOTE_F4, 4, NOTE_G4, 4, NOTE_F4, 4, NOTE_F4, 4,
+    NOTE_G4, 4, NOTE_A4, 4, NOTE_C5, 4, NOTE_C5, 4,
+    NOTE_A4, 4, NOTE_D5, 4, NOTE_C5, 4, NOTE_C5, 8,
 
-    NOTE_A4, NOTE_A4, NOTE_A4, NOTE_F4, NOTE_F4, 
-    NOTE_A4, NOTE_A4, NOTE_F4, NOTE_F4, 
-    NOTE_F4, NOTE_F4, NOTE_F4, NOTE_F4, NOTE_F4,
+    NOTE_A4, 4, NOTE_A4, 4, NOTE_A4, 4, NOTE_F4, 4, NOTE_F4, 4, 
+    NOTE_A4, 4, NOTE_A4, 4, NOTE_F4, 8, NOTE_F4, 8,
+    NOTE_F4, 2, NOTE_F4, 2, NOTE_F4, 2, NOTE_F4, 2, NOTE_F4, 2,
     
-    NOTE_D4, NOTE_D4, NOTE_D4, NOTE_D4, NOTE_D4, NOTE_C4, NOTE_F4, 
-    NOTE_C4, NOTE_C4, NOTE_C4, NOTE_C4, NOTE_C4, NOTE_A3, NOTE_F4,
-    NOTE_Bb3, NOTE_Bb3, NOTE_Bb3, NOTE_Bb3, NOTE_Bb3, NOTE_A3,
+    // NOTE_D4, 4, NOTE_D4, 4, NOTE_D4, 4, NOTE_D4, 4, NOTE_D4, 4, NOTE_C4, 8, NOTE_F4, 2,
+    // NOTE_C4, 4, NOTE_C4, 4, NOTE_C4, 4, NOTE_C4, 4, NOTE_C4, 4, NOTE_A3, 4, NOTE_F4, 2,
+    // NOTE_Bb3, 4, NOTE_Bb3, 4, NOTE_Bb3, 4, NOTE_Bb3, 4, NOTE_Bb3, 4, NOTE_A3, 8,
 
-    NOTE_C4, NOTE_Bb3, NOTE_A3, NOTE_A3, NOTE_A3, NOTE_A3,
-    NOTE_G3, NOTE_G3, NOTE_G3, NOTE_G3, NOTE_G3, NOTE_G3,
-    NOTE_A3, NOTE_G3, NOTE_F3, NOTE_A3, NOTE_D4, NOTE_F4,
+    // NOTE_C4, 4, NOTE_Bb3, 4, NOTE_A3, 2, NOTE_A3, 2, NOTE_A3, 2, NOTE_A3, 2,
+    // NOTE_G3, 4, NOTE_G3, 4, NOTE_G3, 4, NOTE_G3, 4, NOTE_G3, 4, NOTE_G3, 4,
+    // NOTE_A3, 4, NOTE_G3, 4, NOTE_F3, 2, NOTE_A3, 4, NOTE_D4, 4, NOTE_F4, 2,
 
-    NOTE_E4, NOTE_D4, NOTE_C4, NOTE_A3, NOTE_G3,
-    NOTE_C4, NOTE_C4, NOTE_C4, NOTE_C4, NOTE_C4, NOTE_C4, 
-    NOTE_Bb3, NOTE_A3, NOTE_Bb3, 
-    NOTE_C4, NOTE_C4, NOTE_C4, NOTE_C4, NOTE_C4, NOTE_Bb3, NOTE_A3
-
-    // A G F D  F G F F  G A C C  A D C C
-    // A A A F  F A A F  F F F F  
+    // NOTE_E4, 4, NOTE_D4, 4, NOTE_C4, 4, NOTE_A3, 4, NOTE_G3, 1,
+    // NOTE_C4, 4, NOTE_C4, 4, NOTE_C4, 4, NOTE_C4, 4, NOTE_C4, 4, NOTE_C4, 4, 
+    // NOTE_Bb3, 5, NOTE_A3, 4, NOTE_Bb3, 5, 
+    // NOTE_C4, 4, NOTE_C4, 4, NOTE_C4, 4, NOTE_C4, 4, NOTE_C4, 4, NOTE_Bb3, 8, NOTE_A3, 4,
 
   };
 
-  int durations[] = {
-    // Notes duration goes here
-    4, 4, 4, 4, 4, 4, 4, 8,
-    4, 4, 4, 4, 4, 4, 4,
-    4, 4, 4, 4, 8, 4, 4,
-    4, 4, 4, 4, 4, 4, 4,
+  // int durations[] = {
+  //   // Notes duration goes here
+  //   //4, 4, 4, 4, 4, 4, 4, 8,
+  //   //4, 4, 4, 4, 4, 4, 4,
+  //   //4, 4, 4, 4, 8, 4, 4,
+  //   //4, 4, 4, 4, 4, 4, 4,
 
-    4, 4, 4, 4, 4, 4, 4, 8,
-    4, 4, 4, 4, 4, 4, 4,
-    4, 4, 4, 4, 8, 4, 4,
-    4, 4, 4, 4, 4, 4, 4,
+  //   //4, 4, 4, 4, 4, 4, 4, 8,
+  //   //4, 4, 4, 4, 4, 4, 4,
+  //   //4, 4, 4, 4, 8, 4, 4,
+  //   //4, 4, 4, 4, 4, 4, 4,
 
-    4, 4, 4, 4, 8, 4, 2,
-    4, 4, 4, 4, 8, 4, 2,
-    4, 4, 4, 4, 4, 4,
-    4, 4, 2, 4, 2, 8,
+  //   //4, 4, 4, 4, 8, 4, 2,
+  //   //4, 4, 4, 4, 8, 4, 2,
+  //   //4, 4, 4, 4, 4, 4,
+  //   //4, 4, 2, 4, 2, 8,
     
-    4, 4, 4, 4, 4, 4, 
-    4, 4, 4, 2, 2, 4, 
-    8, 4, 4, 4, 4, 4, 
-    4, 4, 4, 4, 8, 4, 
+  //   //4, 4, 4, 4, 4, 4, 
+  //   //4, 4, 4, 2, 2, 4, 
+  //   //8, 4, 4, 4, 4, 4, 
+  //   //4, 4, 4, 4, 8, 4, 
 
-    2, 4, 4, 4, 4, 4, 4, 8, 
-    4, 4, 4, 4, 4, 4, 8, 
-    4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
-    2, 
+  //   //2, 4, 4, 4, 4, 4, 4, 8, 
+  //   //4, 4, 4, 4, 4, 4, 8, 
+  //   //4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+  //   //2, 
 
-    4, 4, 4, 4, 
-    4, 4, 4, 4,
-    4, 4, 4, 4,
-    4, 4, 8, 8,
+  //   //4, 4, 4, 4, 
+  //   //4, 4, 4, 4,
+  //   //4, 4, 4, 4,
+  //   //4, 4, 8, 8,
 
-    4, 4, 4, 4, 4, 
-    4, 4, 8, 8, 
-    2, 2, 2, 2, 2,
+  //   //4, 4, 4, 4, 4, 
+  //   //4, 4, 8, 8, 
+  //   //2, 2, 2, 2, 2,
 
-    4, 4, 4, 4, 4, 8, 2,
-    4, 4, 4, 4, 4, 8, 2,
-    4, 4, 4, 4, 4, 8,
+  //   //4, 4, 4, 4, 4, 8, 2,
+  //   //4, 4, 4, 4, 4, 8, 2,
+  //   //4, 4, 4, 4, 4, 8,
 
-    4, 4, 2, 2, 2, 2,
-    4, 4, 4, 4, 4, 4,
-    4, 4, 2, 4, 4, 2,
+  //   //4, 4, 2, 2, 2, 2,
+  //   //4, 4, 4, 4, 4, 4,
+  //   //4, 4, 2, 4, 4, 2,
 
-    4, 4, 4, 4, 1,
-    4, 4, 4, 4, 4, 4,
-    5, 4, 5, 
-    4, 4, 4, 4, 4, 8, 4,
+  //   4, 4, 4, 4, 1,
+  //   4, 4, 4, 4, 4, 4,
+  //   5, 4, 5, 
+  //   4, 4, 4, 4, 4, 8, 4,
 
-  };
+  // };
 
-  //pinMode(BUZZER_PIN, OUTPUT);
-  int size = sizeof(durations) / sizeof(int);
+  // int size = sizeof(durations) / sizeof(int);
+  int notes = sizeof(melody) / sizeof(melody[0]) / 2;
+  int tempo = 180;
+  int wholenote = (60000 * 4) / tempo;
+  int duration = 0, noteDuration = 0;
 
-  for (int note = 0; note < size; note++) {
+  //for (int note = 0; note < size; note++) {
+  
+  for (int thisNote = 0; thisNote < notes * 2; thisNote = thisNote + 2) {
     //to calculate the note duration, take one second divided by the note type.
     //e.g. quarter note = 1000 / 4, eighth note = 1000/8, etc.
-    int duration = 1000 / durations[note];
-    tone(buzzer, melody[note], duration);
+    // int duration = 1000 / durations[note];
+    // tone(buzzer, melody[note], duration);
 
     //to distinguish the notes, set a minimum time between them.
     //the note's duration + 30% seems to work well:
-    int pauseBetweenNotes = duration * 1.30;
-    delay(pauseBetweenNotes);
+    // int pauseBetweenNotes = duration * 1.30;
+    // delay(pauseBetweenNotes);
+
+    // calculates the duration of each note
+    duration = melody[thisNote + 1];
+    if (duration > 0) {
+      // regular note, just proceed
+      noteDuration = (wholenote) / duration;
+    } else if (duration < 0) {
+      // dotted notes are represented with negative durations!!
+      noteDuration = (wholenote) / abs(duration);
+      noteDuration *= 1.5; // increases the duration in half for dotted notes
+    }
+
+     // we only play the note for 90% of the duration, leaving 10% as a pause
+    tone(buzzer, melody[thisNote], noteDuration * 1.3);
+
+    // Wait for the specief duration before playing the next note.
+    delay(noteDuration);
 
     //stop the tone playing:
     noTone(buzzer);
